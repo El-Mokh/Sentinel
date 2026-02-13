@@ -1,0 +1,12 @@
+# Gradle files
+.gradle/
+build/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+bin/
+
+# System files
+.DS_Store
