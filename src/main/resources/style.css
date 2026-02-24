@@ -1,0 +1,7 @@
+/* * We create a custom class called "overlay-chart".
+ * This targets both the outer chart area AND the inner "plot-background" 
+ * and forces them to be completely see-through.
+ */
+.overlay-chart, .overlay-chart .chart-plot-background {
+    -fx-background-color: transparent;
+}
