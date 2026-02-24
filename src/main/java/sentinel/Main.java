@@ -4,6 +4,7 @@ import javafx.application.Application;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
+import javafx.collections.transformation.SortedList;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -32,7 +33,8 @@ public class Main extends Application {
     private LineChart<Number, Number> cmasChart;
     private LineChart<Number, Number> labChart;
     
-    private FlowPane biomarkerContainer;
+    // UI Elements
+    private HBox biomarkerLine; 
     private Label patientTitle;
     private Label riskLabel;
     private ListView<String> patientList;
@@ -80,20 +82,20 @@ public class Main extends Application {
     }
 
     private void buildDashboard(BorderPane root) {
-        // --- SEARCH BAR FIX ---
         TextField searchField = new TextField();
-        searchField.setPromptText("Search by UUID (e.g., 27ec)...");
+        searchField.setPromptText("Search ID...");
         searchField.setStyle("-fx-padding: 8;");
 
         patientList = new ListView<>();
         ObservableList<String> masterData = FXCollections.observableArrayList(patientData.keySet());
         filteredData = new FilteredList<>(masterData, p -> true);
-        patientList.setItems(filteredData);
+        
+        SortedList<String> sortedData = new SortedList<>(filteredData);
+        patientList.setItems(sortedData);
 
         searchField.textProperty().addListener((obs, oldVal, newVal) -> {
             filteredData.setPredicate(patientId -> {
                 if (newVal == null || newVal.trim().isEmpty()) return true;
-                // Ensures search isn't broken by accidental trailing spaces
                 return patientId.toLowerCase().contains(newVal.toLowerCase().trim());
             });
         });
@@ -106,7 +108,10 @@ public class Main extends Application {
                 } else {
                     Patient p = patientData.get(id);
                     RiskLevel risk = FlareUpDetector.analyze(p);
+                    
+                    // Reverted back to full, complete IDs
                     setText((risk == RiskLevel.CRITICAL ? "⚠️ " : "   ") + id);
+                    
                     if (risk == RiskLevel.CRITICAL) {
                         setTextFill(Color.RED);
                         setStyle("-fx-font-weight: bold;");
@@ -126,7 +131,10 @@ public class Main extends Application {
         NumberAxis xAxis1 = createDateAxis();
         NumberAxis xAxis2 = createDateAxis();
         
-        // Removed the broken .bind() logic from here!
+        xAxis2.setTickLabelsVisible(false);
+        xAxis2.setTickMarkVisible(false);
+        xAxis2.setMinorTickVisible(false);
+        xAxis2.setLabel(""); 
 
         NumberAxis yAxis1 = new NumberAxis();
         yAxis1.setLabel("Muscle Strength (CMAS)");
@@ -158,13 +166,23 @@ public class Main extends Application {
         riskLabel = new Label("");
         riskLabel.setFont(Font.font("Arial", FontWeight.BOLD, 16));
 
-        biomarkerContainer = new FlowPane();
-        biomarkerContainer.setHgap(10);
-        biomarkerContainer.setVgap(10);
+        // FIX: Replaced Dropdown with a Horizontal Scrollable Line
+        biomarkerLine = new HBox(8);
+        biomarkerLine.setAlignment(Pos.CENTER_LEFT);
+        
+        ScrollPane scrollPane = new ScrollPane(biomarkerLine);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setStyle("-fx-background-color: transparent; -fx-background: transparent; -fx-border-color: transparent;");
+        scrollPane.setFitToHeight(true);
+
+        HBox biomarkerBox = new HBox(15, new Label("Biomarkers:"), scrollPane);
+        biomarkerBox.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(scrollPane, Priority.ALWAYS);
         
         VBox centerLayout = new VBox(10);
         centerLayout.setPadding(new Insets(20));
-        centerLayout.getChildren().addAll(patientTitle, riskLabel, chartStack, new Separator(), new Label("Biomarker Overlays:"), biomarkerContainer);
+        centerLayout.getChildren().addAll(patientTitle, riskLabel, chartStack, new Separator(), biomarkerBox);
         VBox.setVgrow(chartStack, Priority.ALWAYS);
 
         SplitPane splitPane = new SplitPane(sidebar, centerLayout);
@@ -198,48 +216,71 @@ public class Main extends Application {
 
     private void loadPatient(String patientId) {
         Patient p = patientData.get(patientId);
-        patientTitle.setText("Patient ID: " + patientId);
+        
+        if (patientId.equals("27ec48bb-769c-4fe9-af36-2c3e51d4988f")) {
+            patientTitle.setText("Patient ID: " + patientId + " (Demo: CMAS Overlay)");
+            patientTitle.setTextFill(Color.DARKBLUE);
+        } else {
+            patientTitle.setText("Patient ID: " + patientId);
+            patientTitle.setTextFill(Color.BLACK);
+        }
 
         RiskLevel risk = FlareUpDetector.analyze(p);
         riskLabel.setText("Risk Status: " + risk);
         if (risk == RiskLevel.CRITICAL) riskLabel.setTextFill(Color.RED);
         else riskLabel.setTextFill(Color.GREEN);
 
-        updateCharts(p, null);
+        biomarkerLine.getChildren().clear();
 
-        biomarkerContainer.getChildren().clear();
         Set<String> tests = new HashSet<>();
         for (MedicalRecord r : p.getHistory()) {
             if (r instanceof LabResult) tests.add(((LabResult) r).getTestName());
         }
 
         if (tests.isEmpty()) {
-            biomarkerContainer.getChildren().add(new Label("No lab data available."));
+            biomarkerLine.getChildren().add(new Label("No lab data available."));
+            updateCharts(p, null);
         } else {
             List<String> sortedTests = new ArrayList<>(tests);
             Collections.sort(sortedTests);
             
-            for (String test : sortedTests) {
+            for (int i = 0; i < sortedTests.size(); i++) {
+                String test = sortedTests.get(i);
+                
+                // Style the button to look like clean, clickable text
                 Button b = new Button(test);
-                b.setStyle("-fx-padding: 8 15; -fx-cursor: hand; -fx-background-color: #e0e0e0;");
+                b.setStyle("-fx-background-color: transparent; -fx-text-fill: #007acc; -fx-cursor: hand; -fx-font-weight: normal;");
+                
                 b.setOnAction(e -> {
                     updateCharts(p, test);
-                    biomarkerContainer.getChildren().forEach(n -> n.setStyle("-fx-padding: 8 15; -fx-background-color: #e0e0e0; -fx-text-fill: black;"));
-                    b.setStyle("-fx-padding: 8 15; -fx-background-color: #007acc; -fx-text-fill: white;");
+                    // Reset all other text buttons
+                    biomarkerLine.getChildren().forEach(node -> {
+                        if (node instanceof Button) {
+                            node.setStyle("-fx-background-color: transparent; -fx-text-fill: #007acc; -fx-cursor: hand; -fx-font-weight: normal;");
+                        }
+                    });
+                    // Highlight the selected one with bold text
+                    b.setStyle("-fx-background-color: transparent; -fx-text-fill: black; -fx-cursor: hand; -fx-font-weight: bold; -fx-underline: true;");
                 });
-                biomarkerContainer.getChildren().add(b);
+                
+                biomarkerLine.getChildren().add(b);
+                
+                // Add the "|" separator between items (except after the last one)
+                if (i < sortedTests.size() - 1) {
+                    Label separator = new Label("|");
+                    separator.setStyle("-fx-text-fill: #a0a0a0;");
+                    biomarkerLine.getChildren().add(separator);
+                }
             }
             
-            if (!biomarkerContainer.getChildren().isEmpty()) {
-                Button firstButton = (Button) biomarkerContainer.getChildren().get(0);
-                firstButton.fire(); 
+            // Automatically select the first biomarker to populate the chart
+            if (!biomarkerLine.getChildren().isEmpty()) {
+                ((Button) biomarkerLine.getChildren().get(0)).fire();
             }
         }
     }
 
     private void updateCharts(Patient p, String biomarker) {
-        // --- THE GRAPH ALIGNMENT FIX ---
-        // We find the oldest and newest record manually and force both charts to fit that space.
         long minDate = Long.MAX_VALUE;
         long maxDate = Long.MIN_VALUE;
         for (MedicalRecord r : p.getHistory()) {
@@ -251,17 +292,24 @@ public class Main extends Application {
         if (minDate <= maxDate) {
             NumberAxis x1 = (NumberAxis) cmasChart.getXAxis();
             NumberAxis x2 = (NumberAxis) labChart.getXAxis();
-            // Turn off JavaFX's broken auto-calculator
+            
             x1.setAutoRanging(false);
             x2.setAutoRanging(false);
-            // Add a 30-day visual padding around the data
-            x1.setLowerBound(minDate - 30);
-            x1.setUpperBound(maxDate + 30);
-            x2.setLowerBound(minDate - 30);
-            x2.setUpperBound(maxDate + 30);
+            
+            double lower = minDate - 30;
+            double upper = maxDate + 30;
+            
+            x1.setLowerBound(lower);
+            x1.setUpperBound(upper);
+            x2.setLowerBound(lower);
+            x2.setUpperBound(upper);
+            
+            double tickSpacing = Math.max((upper - lower) / 10.0, 1.0);
+            x1.setTickUnit(tickSpacing);
+            x2.setTickUnit(tickSpacing);
         }
 
-        // Add the CMAS and Lab Data to the charts
+        // --- 1. CMAS CHART ---
         cmasChart.getData().clear();
         XYChart.Series<Number, Number> cmasSeries = new XYChart.Series<>();
         cmasSeries.setName("Muscle Score");
@@ -271,8 +319,20 @@ public class Main extends Application {
                 cmasSeries.getData().add(new XYChart.Data<>(r.getDate().toEpochDay(), ((CMAS) r).getScore()));
             }
         }
-        if (!cmasSeries.getData().isEmpty()) cmasChart.getData().add(cmasSeries);
+        
+        if (!cmasSeries.getData().isEmpty()) {
+            cmasChart.getData().add(cmasSeries);
+            
+            for (XYChart.Data<Number, Number> data : cmasSeries.getData()) {
+                if (data.getNode() != null) {
+                    String dateStr = LocalDate.ofEpochDay(data.getXValue().longValue()).format(DateTimeFormatter.ofPattern("MMM dd, yyyy"));
+                    Tooltip t = new Tooltip(dateStr + "\nScore: " + data.getYValue());
+                    Tooltip.install(data.getNode(), t);
+                }
+            }
+        }
 
+        // --- 2. LAB CHART ---
         labChart.getData().clear();
         if (biomarker != null) {
             XYChart.Series<Number, Number> labSeries = new XYChart.Series<>();
@@ -287,6 +347,14 @@ public class Main extends Application {
                 labSeries.nodeProperty().addListener((obs, old, newNode) -> {
                     if (newNode != null) newNode.setStyle("-fx-stroke: red; -fx-stroke-width: 2px;");
                 });
+                
+                for (XYChart.Data<Number, Number> data : labSeries.getData()) {
+                    if (data.getNode() != null) {
+                        String dateStr = LocalDate.ofEpochDay(data.getXValue().longValue()).format(DateTimeFormatter.ofPattern("MMM dd, yyyy"));
+                        Tooltip t = new Tooltip(dateStr + "\nValue: " + data.getYValue());
+                        Tooltip.install(data.getNode(), t);
+                    }
+                }
             }
         }
     }
