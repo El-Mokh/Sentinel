@@ -1,0 +1,17 @@
+# Ignore Gradle build folders
+/build/
+/.gradle/
+/out/
+
+# Ignore IDE settings (VS Code, IntelliJ, Eclipse)
+.vscode/
+.idea/
+*.iml
+*.iws
+
+# Ignore compiled Java classes
+*.class
+
+# Ignore the actual database file to prevent team overwrite conflicts!
+sentinel.db
+*.db-journal
