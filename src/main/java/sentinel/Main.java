@@ -11,17 +11,15 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage) {
-        // 1. Boot up the database before the UI loads
+
         DatabaseManager.initializeDatabase();
 
-        // 2. Create a simple placeholder UI
-        Label label = new Label("Sentinel EPD - Walking Skeleton is Alive!");
+        Label label = new Label("Sentinel EPD");
         label.setStyle("-fx-font-size: 20px; -fx-font-family: 'Arial';");
         
         StackPane root = new StackPane(label);
         Scene scene = new Scene(root, 600, 400);
 
-        // 3. Show the window
         stage.setTitle("Sentinel System");
         stage.setScene(scene);
         stage.show();
